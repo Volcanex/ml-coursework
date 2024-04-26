@@ -488,7 +488,10 @@ class ForwardChaining(SearchAlgorithm):
                 
             else:
                 end_process()
-            
+                
+            if old_facts[-1] == facts:
+                end_process()
+                
         def update_plot():
             ax_maze.clear()
             ax_kb.clear()
@@ -557,13 +560,12 @@ class ForwardChaining(SearchAlgorithm):
                     ax_maze.arrow(parent_coords[1], parent_coords[0],
                                 child_coords[1] - parent_coords[1], child_coords[0] - parent_coords[0],
                                 head_width=0.2, head_length=0.2, fc='navy', ec='navy', alpha=0.5)
-                    
-
+            \
             # Draw red arrow from previous "CurrentNode" to current "CurrentNode"
             if current_node and previous_node_coords != current_node_coords:
                 ax_maze.arrow(previous_node_coords[1], previous_node_coords[0],
                             current_node_coords[1] - previous_node_coords[1], current_node_coords[0] - previous_node_coords[0],
-                            head_width=0.2, head_length=0.2, fc='blue', ec='blue', alpha=1)
+                            head_width=0.2, head_length=0.2, fc='blue', ec='blue', alpha=0.5)
             
             ax_maze.set_title("Maze")
             ax_maze.axis('off')

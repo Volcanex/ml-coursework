@@ -432,8 +432,6 @@ class ForwardChaining(SearchAlgorithm):
 
             return facts
 
-
-        
         def end_process():
             # Replace the button with a label
             end_label = plt.text(-1.1, 0.5, "", fontsize=12, ha='center', va='center')

@@ -13,6 +13,8 @@ class BadMaze(Exception):
 
 class Maze:
     def __init__(self, layout):
+        
+        # 1. Representation of the maze nodes.
         self.nodes = []
         for i in range(len(layout)):
             row = []
@@ -54,7 +56,9 @@ class Maze:
             self.end = node
         else:
             raise BadMaze("Invalid end coordinates.")
-        
+    
+    # 2. Success criteria
+    
     def is_end(self, node) -> bool:
         return node.coords == self.end.coords
         
@@ -246,6 +250,7 @@ class BreadthFirstSearch(SearchAlgorithm):
 
         # Continue the search while the queue is not empty
         while queue:
+            
             # Dequeue the next node to explore
             current_node, parent_node, path_cost, path = queue.popleft()
             
@@ -254,28 +259,34 @@ class BreadthFirstSearch(SearchAlgorithm):
 
             # Check if the current node is the end node
             if current_node == end_node:
+                
                 # If the current path cost is less than the best path cost, update the best path and its cost
                 if path_cost < best_path_cost:
                     best_path = path
                     best_path_cost = path_cost
+                    
             else:
                 # Get the neighbors of the current node
                 neighbors = maze.get_neighbors(current_node)
                 
                 # Explore each neighbor
                 for neighbor in neighbors:
+                    
+                    # 4. Function to calculate the cost on each path:
+                    
                     # Calculate the new path cost by adding 1 to the current path cost
                     new_path_cost = path_cost + 1
                     
                     # Check if the neighbor has not been visited or if the new path cost is less than the previously recorded cost
                     if neighbor not in visited or new_path_cost < visited[neighbor]:
+                        
                         # Update the shortest path cost to the neighbor
                         visited[neighbor] = new_path_cost
                         
                         # Create a new path by appending the neighbor to the current path
                         new_path = path + [neighbor]
                         
-                        # Enqueue the neighbor with its parent, new path cost, and new path
+                        # 3. Path function to accumulate past nodes: Add (the neighbor with its parent, new path cost, and new path) to the queue
                         queue.append((neighbor, current_node, new_path_cost, new_path))
 
         # Return the list of steps taken during the search and the best path found
@@ -306,51 +317,9 @@ def test_layout():
         ]
     return layout
 
-def generate_random_qr_code(size, obstacle_ratio=0.3):
-    # Initialize an empty layout
-    layout = [[0] * size for _ in range(size)]
-
-    # Set the fixed patterns for QR code functionality
-    square_size = 7
-    if size < square_size:
-        raise ValueError("Size must be at least 7 to accommodate the QR code patterns")
-
-    # Top-left square
-    for i in range(square_size):
-        for j in range(square_size):
-            layout[i][j] = 1 if i == 0 or i == 6 or j == 0 or j == 6 or (i >= 2 and i <= 4 and j >= 2 and j <= 4) else 0
-
-    # Top-right square
-    for i in range(square_size):
-        for j in range(size - square_size, size):
-            layout[i][j] = 1 if i == 0 or i == 6 or j == size - 1 or j == size - 7 or (i >= 2 and i <= 4 and j >= size - 5 and j <= size - 3) else 0
-
-    # Bottom-left square
-    for i in range(size - square_size, size):
-        for j in range(square_size):
-            layout[i][j] = 1 if i == size - 1 or i == size - 7 or j == 0 or j == 6 or (i >= size - 5 and i <= size - 3 and j >= 2 and j <= 4) else 0
-
-    # Randomly add obstacles
-    num_obstacles = int((size * size - 3 * square_size * square_size) * obstacle_ratio)
-    for _ in range(num_obstacles):
-        while True:
-            row = random.randint(0, size - 1)
-            col = random.randint(0, size - 1)
-            if (
-                (row < square_size and col < square_size) or
-                (row < square_size and col >= size - square_size) or
-                (row >= size - square_size and col < square_size)
-            ):
-                continue
-            if layout[row][col] == 0:
-                layout[row][col] = 1
-                break
-
-    return layout
-
 use_test_layout = False
-maze_x = 21
-maze_y = 21
+maze_x = 10
+maze_y = 40
 obs = 0.4
 search = BreadthFirstSearch()
 
@@ -364,8 +333,7 @@ while True:
 
         else: 
             layout = generate_random_maze(maze_y, maze_x, obs)
-            #layout = generate_random_qr_code(maze_y, obs)
-            
+
         # Create the maze object
         maze = Maze(layout)
 
@@ -375,10 +343,8 @@ while True:
             maze.set_end((maze_y-1, maze_x-1))
 
         # Set the start and end nodes
-        maze.set_start((random.randint(0,maze_y), random.randint(0,maze_x)))
+        maze.set_start((0, 0))
 
-        # Create an instance of the BreadthFirstSearch class
-        
         # Perform the search
         print("Starting search...")
         steps, final_path = search.search(maze)
@@ -386,7 +352,9 @@ while True:
 
         if final_path == None: 
             raise BadMaze("No path found.")
-
+        else:
+            print(f"Final path: {str(final_path)}")
+            
         # Visualize the search process
         print("Visualizing the search process...")
         maze.visualize(steps, search, final_path)

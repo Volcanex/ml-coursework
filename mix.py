@@ -311,20 +311,23 @@ class BreadthFirstSearch(SearchAlgorithm):
 class ForwardChaining(SearchAlgorithm):
     def search(self, maze):
         # Fact types
-        # KnownNode: (Y, X), (Bool)
+        # Known: (Y, X), (Bool)
         # CurrentNode: (Y, X), (Y', X')  # Parent node is for visuals only
         # VisitedNode: (Y, X) , (Index)
         # EndNode: (Y, X)
+        # StartNode: (Y, X)
         # ParentChild: (Y, X), (Y', X')
         # PreviousNode: (Y, X)
+        # CanMove: (Y, X)
         
         start_node = maze.start.coords
         end_node = maze.end.coords
         
         facts: list[tuple] = [
-            ("KnownNode", (start_node, True)),
+            ("Known", (start_node, True)),
             ("CurrentNode", start_node, start_node),
             ("EndNode", end_node),
+            ("StartNode", start_node),
             ("VisitedNode", start_node, 0),
             ("ParentChild", start_node, start_node),
         ]
@@ -332,24 +335,53 @@ class ForwardChaining(SearchAlgorithm):
         def sensor(maze: Maze, facts: list[tuple]) -> list[tuple]:
             current_node_coords = next((node for item in facts if isinstance(item, tuple) and len(item) == 3 and item[0] == "CurrentNode" for node in [item[1]]), None)
             if current_node_coords is None:
-                return facts  # Return the original facts if current_node_coords is None
+                return facts  
 
-            near = []
-            for r in maze.nodes:
-                for node in r:
-                    if (node.coords[0] == current_node_coords[0] and node.coords[1] == current_node_coords[1]+1) or \
-                    (node.coords[0] == current_node_coords[0] and node.coords[1] == current_node_coords[1]-1) or \
-                    (node.coords[0] == current_node_coords[0]+1 and node.coords[1] == current_node_coords[1]) or \
-                    (node.coords[0] == current_node_coords[0]-1 and node.coords[1] == current_node_coords[1]):
-                        near.append((node.coords, node.is_passable))
-            for node, passable in near:
-                if ("KnownNode", (node, passable)) not in facts:
-                    facts.append(("KnownNode", (node, passable)))
-                    print("DETECTED NODE:")
-                    print(node)
+            directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # Up, Down, Right, Left
+
+            for dy, dx in directions:
+                y, x = current_node_coords
+                neighbor_coords = (y + dy, x + dx)
+
+                if 0 <= neighbor_coords[0] < maze.num_rows and 0 <= neighbor_coords[1] < maze.num_cols:
+                    node = maze.nodes[neighbor_coords[0]][neighbor_coords[1]]
+
+                    if ("Known", (neighbor_coords, node.is_passable)) not in facts:
+                        facts.append(("Known", (neighbor_coords, node.is_passable)))
+                        print("Detected node:")
+                        print(neighbor_coords)
+                else:
+
+                    if ("Known", (neighbor_coords, False)) not in facts:
+                        facts.append(("Known", (neighbor_coords, False)))
+                        print("Detected node (Outside Maze):")
+                        print(neighbor_coords)
+
             return facts
         
-        def rule0(facts: list[tuple]) -> list[tuple]:
+        def rule_movement_restrictions(facts: list[tuple]) -> list[tuple]:
+            current_node_coords = next((node for item in facts if isinstance(item, tuple) and len(item) == 3 and item[0] == "CurrentNode" for node in [item[1]]), None)
+            if current_node_coords is None:
+                return facts
+
+            # Delete existing CanMove facts from the knowledge base
+            facts = [fact for fact in facts if fact[0] != "CanMove"]
+
+            directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # Up, Down, Right, Left
+
+            for dy, dx in directions:
+                y, x = current_node_coords
+                neighbor_coords = (y + dy, x + dx)
+
+                known_fact = next((fact for fact in facts if isinstance(fact, tuple) and fact[0] == "Known" and fact[1][0] == neighbor_coords), None)
+                if known_fact:
+                    _, (_, is_passable) = known_fact
+                    if is_passable:
+                        facts.append(("CanMove", (current_node_coords, neighbor_coords)))
+
+            return facts
+        
+        def rule_make_parent_child(facts: list[tuple]) -> list[tuple]:
             current_node = next((fact[1:] for fact in facts if fact[0] == "CurrentNode"), None)
             if current_node is None:
                 return facts
@@ -364,8 +396,9 @@ class ForwardChaining(SearchAlgorithm):
                         facts.append(("ParentChild", previous_node_coords, node))
 
             return facts
-
-        def rule1(facts: list[tuple]) -> list[tuple]:
+        
+        
+        def rule_progress_or_backtrack(facts: list[tuple]) -> list[tuple]:
             current_node = next((node for item in facts if isinstance(item, tuple) and len(item) == 3 and item[0] == "CurrentNode" for node in [item[1:3]]), None)
             print(f"Current node: {current_node}")
             if current_node:
@@ -373,20 +406,21 @@ class ForwardChaining(SearchAlgorithm):
                 traversable_nodes = []
                 for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
                     new_node = (current_node_coords[0] + dy, current_node_coords[1] + dx)
-                    if any(item[0] == "KnownNode" and item[1] == (new_node, True) for item in facts):
+                    if any(item[0] == "Known" and item[1] == (new_node, True) for item in facts):
                         traversable_nodes.append(new_node)
                 print(f"Traversable nodes: {traversable_nodes}")
 
                 if traversable_nodes:
-                    # Check if there's a "VisitedNode" fact for each traversable node
+                    # Check if there's a "VisitedNode" fact and a "CanMove" fact for each traversable node
                     for index, next_node in enumerate(traversable_nodes):
                         visited_node_fact = next((fact for fact in facts if isinstance(fact, tuple) and fact[0] == "VisitedNode" and fact[1] == next_node), None)
-                        if not visited_node_fact:
-                            # Select the next node to visit (e.g., the first unvisited traversable node)
+                        can_move_fact = next((fact for fact in facts if isinstance(fact, tuple) and fact[0] == "CanMove" and fact[1][1] == next_node), None)
+                        if not visited_node_fact and can_move_fact:
+
+                            # Select the next node to visit
                             print(f"Next node: {next_node}")
                             facts = [item for item in facts if not isinstance(item, tuple) or item[0] != "CurrentNode"]
                             facts.append(("CurrentNode", next_node, current_node_coords))  # Store the previous node
-                            print(f"Updated facts: {facts}")
                             return facts
 
                     # Backtrack to the previously visited node
@@ -419,8 +453,8 @@ class ForwardChaining(SearchAlgorithm):
 
             print(f"No changes made to facts: {facts}")
             return facts
-
-        def rule2(facts: list[tuple]) -> list[tuple]:
+        
+        def rule_visited(facts: list[tuple]) -> list[tuple]:
             # Add the Visited fact for the current node
             current_node = next((fact[1] for fact in facts if fact[0] == "CurrentNode"), None)
             if current_node:
@@ -446,7 +480,7 @@ class ForwardChaining(SearchAlgorithm):
                     # Trace back the path from the end node to the start node
                     final_path = []
                     tracer = end_node
-                    start_node = next((fact[1] for fact in facts if fact[0] == "CurrentNode"), None)
+                    start_node = next((fact[1] for fact in facts if fact[0] == "StartNode"), None)
                     if start_node is not None:
                         while tracer != start_node:
                             final_path.append(tracer)
@@ -456,14 +490,14 @@ class ForwardChaining(SearchAlgorithm):
                                 tracer = parent_child_fact[1]
                             else:
                                 break
-                        final_path.reverse()
+                        final_path.append(start_node)  # Add the start node to the final path
 
                         # Draw the final path
                         for i in range(len(final_path) - 1):
-                            start_node = final_path[i]
-                            end_node = final_path[i + 1]
-                            ax_maze.arrow(start_node[1], start_node[0],
-                                        end_node[1] - start_node[1], end_node[0] - start_node[0],
+                            start_node_coords = final_path[i]
+                            end_node_coords = final_path[i + 1]
+                            ax_maze.arrow(end_node_coords[1], end_node_coords[0],
+                                        start_node_coords[1] - end_node_coords[1], start_node_coords[0] - end_node_coords[0],
                                         head_width=0.2, head_length=0.2, fc='green', ec='green')
                 else:
                     end_label.set_text("No End Found.")
@@ -471,26 +505,6 @@ class ForwardChaining(SearchAlgorithm):
                 end_label.set_text("No End Node found.")
 
             fig.canvas.draw()
-        
-        def on_iterate(event):
-            nonlocal old_facts, facts
-            if old_facts[-1] != facts:
-                old_facts.append(facts.copy())  
-                facts = sensor(maze, facts)
-                for rule in rules:
-                    result = rule(facts)
-                    if result is not None:
-                        facts = result
-
-                update_plot()
-                
-                print(facts)
-                
-            else:
-                end_process()
-                
-            if old_facts[-1] == facts:
-                end_process()
                 
         def update_plot():
             ax_maze.clear()
@@ -500,22 +514,30 @@ class ForwardChaining(SearchAlgorithm):
             ax_maze.imshow(maze.base_layout, cmap='YlOrRd')
             
             # Draw fog of war
-            known_nodes = [(fact[1][0]) for fact in facts if fact[0] == "KnownNode"]
+            known_nodes = [(fact[1][0]) for fact in facts if fact[0] == "Known"]
             for i in range(maze.num_rows):
                 for j in range(maze.num_cols):
                     if (i, j) not in known_nodes:
                         ax_maze.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, edgecolor='none', facecolor='black', alpha=0.3))
                         
-            for i in range(maze.num_rows):
-                for j in range(maze.num_cols):
-                    if ("KnownNode", ((i, j), True)) in facts:
-                        ax_maze.text(j, i, f"K({i}, {j})", ha='center', va='bottom', color='black', fontsize=8)
-                    if ("KnownNode", ((i, j), False)) in facts:
-                        ax_maze.text(j, i, f"K({i}, {j})", ha='center', va='center', color='red', fontsize=8)
-                    visited_facts = [fact for fact in facts if fact[0] == "VisitedNode" and fact[1] == (i, j)]
-                    if visited_facts:
-                        ax_maze.text(j, i, f"V({i}, {j})", ha='center', va='top', color='purple', fontsize=8)
+            for fact in facts:
+                if fact[0] == "Known":
+                    coords, is_passable = fact[1]
+                    i, j = coords
+                    if 0 <= i < maze.num_rows and 0 <= j < maze.num_cols:
+                        if is_passable:
+                            ax_maze.text(j, i, f"Known", ha='center', va='bottom', color='black', fontsize=8)
+                        else:
+                            ax_maze.text(j, i, f"Known\nImpassable", ha='center', va='center', color='red', fontsize=8)
+                    else:
+                        ax_maze.text(j, i, f"Known\nBoundary", ha='center', va='center', color='darkred', fontsize=8)
 
+                    ax_maze.text(j-0.3, i-0.3, f"{i},{j}", ha='center', va='center', color='black', fontsize=6)
+
+                if fact[0] == "VisitedNode":
+                    i, j = fact[1]
+                    ax_maze.text(j, i, f"Visited({str(fact[2])})", ha='center', va='top', color='purple', fontsize=8)
+            
             # Mark start and end nodes
             start_row, start_col = maze.start.coords
             end_row, end_col = maze.end.coords
@@ -533,8 +555,8 @@ class ForwardChaining(SearchAlgorithm):
             fact_strings = []
             max_length = 15
             for fact in facts:
-                if fact[0] == "KnownNode":
-                    fact_string = f"(KnownNode: {str(fact[1][0][0])},{str(fact[1][0][1])},{str(fact[1][1])})"
+                if fact[0] == "Known":
+                    fact_string = f"(Known: {str(fact[1][0][0])},{str(fact[1][0][1])},{str(fact[1][1])})"
                 elif fact[0] == "VisitedNode":
                     fact_string = f"(VisitedNode: {str(fact[1])},N={str(fact[2])})"
                 elif fact[0] == "ParentChild":
@@ -560,12 +582,12 @@ class ForwardChaining(SearchAlgorithm):
                     ax_maze.arrow(parent_coords[1], parent_coords[0],
                                 child_coords[1] - parent_coords[1], child_coords[0] - parent_coords[0],
                                 head_width=0.2, head_length=0.2, fc='navy', ec='navy', alpha=0.5)
-            \
+            
             # Draw red arrow from previous "CurrentNode" to current "CurrentNode"
             if current_node and previous_node_coords != current_node_coords:
                 ax_maze.arrow(previous_node_coords[1], previous_node_coords[0],
                             current_node_coords[1] - previous_node_coords[1], current_node_coords[0] - previous_node_coords[0],
-                            head_width=0.2, head_length=0.2, fc='blue', ec='blue', alpha=0.5)
+                            head_width=0.2, head_length=0.2, fc='red', ec='red', alpha=1)
             
             ax_maze.set_title("Maze")
             ax_maze.axis('off')
@@ -574,10 +596,8 @@ class ForwardChaining(SearchAlgorithm):
 
             fig.canvas.draw()
 
-        print(f"\n\n-----------------------------------------------------\n")
-        print(facts)
-
-        rules = (rule0, rule1, rule2)
+        rules = (rule_movement_restrictions, rule_make_parent_child, rule_progress_or_backtrack, 
+        rule_visited)
         old_facts = [None]
         
         fig, (ax_maze, ax_kb) = plt.subplots(1, 2, figsize=(12, 6))
@@ -586,6 +606,36 @@ class ForwardChaining(SearchAlgorithm):
         # Create the "Iterate" button
         ax_button = plt.axes([0.4, 0.05, 0.2, 0.075])
         button = Button(ax_button, 'Iterate')
+
+
+        def on_iterate(event):
+            nonlocal old_facts, facts
+            if old_facts[-1] != facts:
+                old_facts.append(facts.copy())  
+                print("\n\nSensor:\n")
+                facts = sensor(maze, facts)
+                for rule in rules:
+
+                    result = rule(facts)
+                    if result is not None:
+                        facts = result
+
+                    print(f"\n\nRule: {rules.index(rule)}\n")
+                    new_facts = [fact for fact in facts if fact not in old_facts]
+                    for fact in new_facts:
+                        print(f"{fact[0]} : {fact[1:]}")
+
+                print(f"\n\n-----------------------------------------------------\n")
+
+                print(facts)
+                update_plot()
+                
+            else:
+                end_process()
+                
+            if old_facts[-1] == facts:
+                end_process()
+
         button.on_clicked(on_iterate)
 
         update_plot()
@@ -683,7 +733,7 @@ while True:
         else: 
             maze_x = 10
             maze_y = 10
-            obs = 0.5
+            obs = 0.25
             maze_end = (maze_y-1, maze_x-1)
             layout = generate_random_maze(maze_y, maze_x, obs)
 

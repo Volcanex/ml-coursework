@@ -2,9 +2,15 @@
 
 This project implements and visualizes various pathfinding algorithms in a maze environment. It includes two main Python scripts that demonstrate different approaches to maze solving.
 
+![Mazing solving image](image)
+(Graph based solver)
+
+![Mazing solving image](image2)
+(Forward chaining)
+
 ## Files
 
-1. `maze_solver.py`: This file contains the core implementation of the maze solving algorithms, including Breadth-First Search (BFS) and A* Search.
+1. `maze_solver.py`: This file contains the core implementation of the graph  traversal algorithms, including Breadth-First Search (BFS) and A* Search.
 
 2. `forward_chaining_solver.py`: This file implements a Forward Chaining approach to maze solving, demonstrating a rule-based system for pathfinding.
 

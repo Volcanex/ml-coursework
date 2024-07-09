@@ -2,10 +2,10 @@
 
 This project implements and visualizes various pathfinding algorithms in a maze environment. It includes two main Python scripts that demonstrate different approaches to maze solving.
 
-![Mazing solving image](image)
+![Mazing solving image](image.png)
 (Graph based solver)
 
-![Mazing solving image](image2)
+![Mazing solving image](image2.png)
 (Forward chaining)
 
 ## Files
